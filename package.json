@@ -6,6 +6,7 @@
     "test": "playwright test",
     "test:smoke": "playwright test --project=smoke-chromium",
     "test:e2e": "playwright test --project=e2e-chromium",
+    "test:all": "playwright test --project=smoke-chromium --project=e2e-chromium --project=e2e-firefox --project=e2e-webkit",
     "report": "playwright show-report"
   },
   "devDependencies": {

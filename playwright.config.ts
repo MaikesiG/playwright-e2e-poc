@@ -13,15 +13,35 @@ export default defineConfig({
     ['list'],
   ],
   use: {
-    baseURL: process.env.BASE_URL || 'https://playwright.dev',
+    baseURL: process.env.BASE_URL || 'http://localhost:4200',
     headless: true,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    // ── Smoke Tests (fast, chromium only) ──
+    {
+      name: 'smoke-chromium',
+      testMatch: '**/smoke/**/*.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
+
+    // ── E2E Full Tests (all browsers) ──
+    {
+      name: 'e2e-chromium',
+      testMatch: '**/e2e/**/*.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'e2e-firefox',
+      testMatch: '**/e2e/**/*.spec.ts',
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'e2e-webkit',
+      testMatch: '**/e2e/**/*.spec.ts',
+      use: { ...devices['Desktop Safari'] },
+    },
   ],
 });
