@@ -1,0 +1,14 @@
+<nav>
+  <span class="logo">MyApp</span>
+  <a
+    routerLink="/"
+    routerLinkActive="active"
+    [routerLinkActiveOptions]="{ exact: true }"
+    >Home</a
+  >
+  <a routerLink="/login" routerLinkActive="active">Login</a>
+  <a routerLink="/products" routerLinkActive="active">Products</a>
+</nav>
+<main>
+  <router-outlet />
+</main>
