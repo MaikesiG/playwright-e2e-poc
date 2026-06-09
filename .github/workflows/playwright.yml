@@ -19,8 +19,10 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - name: Install Angular app dependencies
+        run: cd angular-app && npm ci
       - name: Start Angular app
-        run: node_modules/.bin/ng serve --host 0.0.0.0 &
+        run: cd angular-app && node_modules/.bin/ng serve --host 0.0.0.0 &
       - name: Wait for Angular app
         run: npx wait-on http://localhost:4200 --timeout 60000
       - run: npm run test:smoke
@@ -46,8 +48,10 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - name: Install Angular app dependencies
+        run: cd angular-app && npm ci
       - name: Start Angular app
-        run: node_modules/.bin/ng serve --host 0.0.0.0 &
+        run: cd angular-app && node_modules/.bin/ng serve --host 0.0.0.0 &
       - name: Wait for Angular app
         run: npx wait-on http://localhost:4200 --timeout 60000
       - run: npx playwright test --project=e2e-chromium
@@ -73,8 +77,10 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx playwright install --with-deps firefox
+      - name: Install Angular app dependencies
+        run: cd angular-app && npm ci
       - name: Start Angular app
-        run: node_modules/.bin/ng serve --host 0.0.0.0 &
+        run: cd angular-app && node_modules/.bin/ng serve --host 0.0.0.0 &
       - name: Wait for Angular app
         run: npx wait-on http://localhost:4200 --timeout 60000
       - run: npx playwright test --project=e2e-firefox
@@ -100,8 +106,10 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx playwright install --with-deps webkit
+      - name: Install Angular app dependencies
+        run: cd angular-app && npm ci
       - name: Start Angular app
-        run: node_modules/.bin/ng serve --host 0.0.0.0 &
+        run: cd angular-app && node_modules/.bin/ng serve --host 0.0.0.0 &
       - name: Wait for Angular app
         run: npx wait-on http://localhost:4200 --timeout 60000
       - run: npx playwright test --project=e2e-webkit
