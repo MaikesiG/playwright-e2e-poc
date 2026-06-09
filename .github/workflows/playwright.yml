@@ -22,9 +22,14 @@ jobs:
       - name: Install Angular app dependencies
         run: cd angular-app && npm ci
       - name: Start Angular app
-        run: cd angular-app && node_modules/.bin/ng serve --host 0.0.0.0 &
+        run: |
+          cd angular-app
+          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 > /tmp/ng-serve.log 2>&1 &
+          echo "Angular PID: $!"
+
       - name: Wait for Angular app
-        run: npx wait-on http://localhost:4200 --timeout 60000
+        run: |
+          npx wait-on http://localhost:4200 --timeout 120000 || (cat /tmp/ng-serve.log && exit 1)
       - run: npm run test:smoke
         env:
           CI: true
@@ -51,9 +56,14 @@ jobs:
       - name: Install Angular app dependencies
         run: cd angular-app && npm ci
       - name: Start Angular app
-        run: cd angular-app && node_modules/.bin/ng serve --host 0.0.0.0 &
+        run: |
+          cd angular-app
+          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 > /tmp/ng-serve.log 2>&1 &
+          echo "Angular PID: $!"
+
       - name: Wait for Angular app
-        run: npx wait-on http://localhost:4200 --timeout 60000
+        run: |
+          npx wait-on http://localhost:4200 --timeout 120000 || (cat /tmp/ng-serve.log && exit 1)
       - run: npx playwright test --project=e2e-chromium
         env:
           CI: true
@@ -80,9 +90,14 @@ jobs:
       - name: Install Angular app dependencies
         run: cd angular-app && npm ci
       - name: Start Angular app
-        run: cd angular-app && node_modules/.bin/ng serve --host 0.0.0.0 &
+        run: |
+          cd angular-app
+          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 > /tmp/ng-serve.log 2>&1 &
+          echo "Angular PID: $!"
+
       - name: Wait for Angular app
-        run: npx wait-on http://localhost:4200 --timeout 60000
+        run: |
+          npx wait-on http://localhost:4200 --timeout 120000 || (cat /tmp/ng-serve.log && exit 1)
       - run: npx playwright test --project=e2e-firefox
         env:
           CI: true
@@ -109,9 +124,14 @@ jobs:
       - name: Install Angular app dependencies
         run: cd angular-app && npm ci
       - name: Start Angular app
-        run: cd angular-app && node_modules/.bin/ng serve --host 0.0.0.0 &
+        run: |
+          cd angular-app
+          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 > /tmp/ng-serve.log 2>&1 &
+          echo "Angular PID: $!"
+
       - name: Wait for Angular app
-        run: npx wait-on http://localhost:4200 --timeout 60000
+        run: |
+          npx wait-on http://localhost:4200 --timeout 120000 || (cat /tmp/ng-serve.log && exit 1)
       - run: npx playwright test --project=e2e-webkit
         env:
           CI: true
