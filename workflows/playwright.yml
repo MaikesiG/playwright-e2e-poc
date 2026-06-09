@@ -1,4 +1,3 @@
-cat > .github/workflows/playwright.yml << 'EOF'
 name: Playwright E2E Tests
 
 on:
@@ -51,7 +50,6 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-
   # ── E2E Chromium ───────────────────────────────────────
   e2e-chromium:
     name: 'E2E - Chromium'
@@ -95,7 +93,6 @@ jobs:
           name: report-e2e-chromium
           path: playwright-report/
           retention-days: 30
-
 
   # ── E2E Firefox ────────────────────────────────────────
   e2e-firefox:
@@ -141,7 +138,6 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-
   # ── E2E WebKit ─────────────────────────────────────────
   e2e-webkit:
     name: 'E2E - WebKit'
@@ -186,7 +182,6 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-
   # ── Quality Gate ───────────────────────────────────────
   quality-gate:
     name: '✅ Quality Gate'
@@ -204,7 +199,6 @@ jobs:
             exit 1
           fi
           echo "✅ Quality Gate PASSED - all browsers green"
-
 
   # ── Deploy Report to GitHub Pages ──────────────────────
   deploy-report:
@@ -233,4 +227,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
