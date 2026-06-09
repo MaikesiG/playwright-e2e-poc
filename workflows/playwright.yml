@@ -18,9 +18,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm' # ✅ npm 缓存
+          cache: 'npm'
 
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -28,18 +29,19 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
 
-      - run: npx playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
 
       - name: Start Angular app
-        run: npx ng serve --host 0.0.0.0 & # ✅ 后台启动
+        run: npx ng serve --host 0.0.0.0 &
 
-      - name: Wait for Angular app
-        run: npx wait-on http://localhost:4200 --timeout 60000 # ✅ 等待就绪
+      - name: Wait for Angular app to be ready
+        run: npx wait-on http://localhost:4200 --timeout 60000
 
-      - run: npm run test:smoke
+      - name: Run Smoke Tests
+        run: npm run test:smoke
         env:
           CI: true
-          BASE_URL: ${{ vars.BASE_URL || 'http://localhost:4200' }}
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -62,7 +64,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -70,18 +73,19 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
 
-      - run: npx playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
 
       - name: Start Angular app
         run: npx ng serve --host 0.0.0.0 &
 
-      - name: Wait for Angular app
+      - name: Wait for Angular app to be ready
         run: npx wait-on http://localhost:4200 --timeout 60000
 
-      - run: npx playwright test --project=e2e-chromium
+      - name: Run E2E Tests - Chromium
+        run: npx playwright test --project=e2e-chromium
         env:
           CI: true
-          BASE_URL: ${{ vars.BASE_URL || 'http://localhost:4200' }}
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -104,7 +108,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -112,18 +117,19 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-firefox-${{ hashFiles('package-lock.json') }}
 
-      - run: npx playwright install --with-deps firefox
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps firefox
 
       - name: Start Angular app
         run: npx ng serve --host 0.0.0.0 &
 
-      - name: Wait for Angular app
+      - name: Wait for Angular app to be ready
         run: npx wait-on http://localhost:4200 --timeout 60000
 
-      - run: npx playwright test --project=e2e-firefox
+      - name: Run E2E Tests - Firefox
+        run: npx playwright test --project=e2e-firefox
         env:
           CI: true
-          BASE_URL: ${{ vars.BASE_URL || 'http://localhost:4200' }}
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -146,7 +152,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -154,18 +161,19 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-webkit-${{ hashFiles('package-lock.json') }}
 
-      - run: npx playwright install --with-deps webkit
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps webkit
 
       - name: Start Angular app
         run: npx ng serve --host 0.0.0.0 &
 
-      - name: Wait for Angular app
+      - name: Wait for Angular app to be ready
         run: npx wait-on http://localhost:4200 --timeout 60000
 
-      - run: npx playwright test --project=e2e-webkit
+      - name: Run E2E Tests - WebKit
+        run: npx playwright test --project=e2e-webkit
         env:
           CI: true
-          BASE_URL: ${{ vars.BASE_URL || 'http://localhost:4200' }}
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -192,11 +200,11 @@ jobs:
           fi
           echo "✅ Quality Gate PASSED - all browsers green"
 
-  # ── Deploy Report to GitHub Pages ─────────────────────
+  # ── Deploy Report to GitHub Pages ──────────────────────
   deploy-report:
     name: '📊 Deploy Playwright Report'
     needs: [smoke, e2e-chromium, e2e-firefox, e2e-webkit]
-    if: always() && github.ref == 'refs/heads/main' # ✅ 只在 main 分支部署
+    if: always() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       pages: write
