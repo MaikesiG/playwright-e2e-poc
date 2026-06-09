@@ -10,8 +10,10 @@
     "report": "playwright show-report"
   },
   "devDependencies": {
+    "@angular/cli": "^22.0.0",
     "@playwright/test": "^1.54.0",
     "@types/node": "^20.0.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "wait-on": "^9.0.10"
   }
 }
