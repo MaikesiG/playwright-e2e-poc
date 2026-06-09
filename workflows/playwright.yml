@@ -14,15 +14,33 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm' # ✅ npm 缓存
+
       - run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
+
       - run: npx playwright install --with-deps chromium
+
+      - name: Start Angular app
+        run: npx ng serve --host 0.0.0.0 & # ✅ 后台启动
+
+      - name: Wait for Angular app
+        run: npx wait-on http://localhost:4200 --timeout 60000 # ✅ 等待就绪
+
       - run: npm run test:smoke
         env:
           CI: true
-          BASE_URL: ${{ vars.BASE_URL || 'https://playwright.dev' }}
+          BASE_URL: ${{ vars.BASE_URL || 'http://localhost:4200' }}
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -33,20 +51,38 @@ jobs:
   # ── E2E Chromium ───────────────────────────────────────
   e2e-chromium:
     name: 'E2E - Chromium'
-    needs: smoke # smoke pass then run E2E
+    needs: smoke
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+
       - run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
+
       - run: npx playwright install --with-deps chromium
+
+      - name: Start Angular app
+        run: npx ng serve --host 0.0.0.0 &
+
+      - name: Wait for Angular app
+        run: npx wait-on http://localhost:4200 --timeout 60000
+
       - run: npx playwright test --project=e2e-chromium
         env:
           CI: true
-          BASE_URL: ${{ vars.BASE_URL || 'https://playwright.dev' }}
+          BASE_URL: ${{ vars.BASE_URL || 'http://localhost:4200' }}
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -62,15 +98,33 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+
       - run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-firefox-${{ hashFiles('package-lock.json') }}
+
       - run: npx playwright install --with-deps firefox
+
+      - name: Start Angular app
+        run: npx ng serve --host 0.0.0.0 &
+
+      - name: Wait for Angular app
+        run: npx wait-on http://localhost:4200 --timeout 60000
+
       - run: npx playwright test --project=e2e-firefox
         env:
           CI: true
-          BASE_URL: ${{ vars.BASE_URL || 'https://playwright.dev' }}
+          BASE_URL: ${{ vars.BASE_URL || 'http://localhost:4200' }}
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -86,15 +140,33 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+
       - run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-webkit-${{ hashFiles('package-lock.json') }}
+
       - run: npx playwright install --with-deps webkit
+
+      - name: Start Angular app
+        run: npx ng serve --host 0.0.0.0 &
+
+      - name: Wait for Angular app
+        run: npx wait-on http://localhost:4200 --timeout 60000
+
       - run: npx playwright test --project=e2e-webkit
         env:
           CI: true
-          BASE_URL: ${{ vars.BASE_URL || 'https://playwright.dev' }}
+          BASE_URL: ${{ vars.BASE_URL || 'http://localhost:4200' }}
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -119,3 +191,31 @@ jobs:
             exit 1
           fi
           echo "✅ Quality Gate PASSED - all browsers green"
+
+  # ── Deploy Report to GitHub Pages ─────────────────────
+  deploy-report:
+    name: '📊 Deploy Playwright Report'
+    needs: [smoke, e2e-chromium, e2e-firefox, e2e-webkit]
+    if: always() && github.ref == 'refs/heads/main' # ✅ 只在 main 分支部署
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: report-e2e-chromium
+          path: playwright-report/
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: playwright-report/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
