@@ -58,6 +58,9 @@
         },
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
+          "options": {
+            "allowedHosts": ["all"]
+          },
           "configurations": {
             "production": {
               "buildTarget": "angular-app:build:production"
@@ -66,10 +69,7 @@
               "buildTarget": "angular-app:build:development"
             }
           },
-          "defaultConfiguration": "development",
-          "options": {
-            "allowedHosts": ["all"]
-          }
+          "defaultConfiguration": "development"
         },
         "extract-i18n": {
           "builder": "@angular-devkit/build-angular:extract-i18n"
