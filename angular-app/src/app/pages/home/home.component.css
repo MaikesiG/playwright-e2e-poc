@@ -1,0 +1,52 @@
+h1 {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+.subtitle {
+  color: #666;
+  margin-bottom: 24px;
+}
+.search-box {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+input {
+  padding: 10px 14px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 15px;
+  width: 320px;
+}
+input:focus {
+  outline: none;
+  border-color: #0070f3;
+}
+button {
+  padding: 10px 20px;
+  background: #0070f3;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  cursor: pointer;
+}
+button:hover {
+  background: #005bb5;
+}
+.error {
+  color: #d32f2f;
+  font-size: 14px;
+  min-height: 20px;
+  margin-bottom: 8px;
+}
+.result-item {
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+}
+.no-result {
+  color: #888;
+}
