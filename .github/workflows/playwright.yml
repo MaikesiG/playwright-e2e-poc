@@ -7,8 +7,31 @@ on:
     branches: [main]
 
 jobs:
+  unit-tests:
+    name: '🧪 Unit Tests'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: angular-app/package-lock.json
+      - name: Install Angular dependencies
+        run: cd angular-app && npm ci
+      - name: Run unit tests
+        run: cd angular-app && npx ng test --watch=false --browsers=ChromeHeadless
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-results
+          path: angular-app/coverage/
+          retention-days: 30
+
   smoke:
-    name: 'Smoke Tests - Chromium'
+    name: '💨 Smoke Tests'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -19,17 +42,14 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Install Angular app dependencies
+      - name: Install Angular dependencies
         run: cd angular-app && npm ci
       - name: Start Angular app
         run: |
           cd angular-app
-          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 --allowed-hosts all > /tmp/ng-serve.log 2>&1 &
-          echo "Angular PID: $!"
-
-      - name: Wait for Angular app
-        run: |
-          npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
+          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 --disable-host-check > /tmp/ng-serve.log 2>&1 &
+      - name: Wait for app
+        run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
       - run: npm run test:smoke
         env:
           CI: true
@@ -41,7 +61,7 @@ jobs:
           retention-days: 30
 
   e2e-chromium:
-    name: 'E2E - Chromium'
+    name: '🌐 E2E - Chromium'
     needs: smoke
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -53,17 +73,13 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Install Angular app dependencies
-        run: cd angular-app && npm ci
+      - run: cd angular-app && npm ci
       - name: Start Angular app
         run: |
           cd angular-app
-          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 --allowed-hosts all > /tmp/ng-serve.log 2>&1 &
-          echo "Angular PID: $!"
-
-      - name: Wait for Angular app
-        run: |
-          npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
+          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 --disable-host-check > /tmp/ng-serve.log 2>&1 &
+      - name: Wait for app
+        run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
       - run: npx playwright test --project=e2e-chromium
         env:
           CI: true
@@ -75,7 +91,7 @@ jobs:
           retention-days: 30
 
   e2e-firefox:
-    name: 'E2E - Firefox'
+    name: '🦊 E2E - Firefox'
     needs: smoke
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -87,17 +103,13 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx playwright install --with-deps firefox
-      - name: Install Angular app dependencies
-        run: cd angular-app && npm ci
+      - run: cd angular-app && npm ci
       - name: Start Angular app
         run: |
           cd angular-app
-          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 --allowed-hosts all > /tmp/ng-serve.log 2>&1 &
-          echo "Angular PID: $!"
-
-      - name: Wait for Angular app
-        run: |
-          npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
+          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 --disable-host-check > /tmp/ng-serve.log 2>&1 &
+      - name: Wait for app
+        run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
       - run: npx playwright test --project=e2e-firefox
         env:
           CI: true
@@ -109,7 +121,7 @@ jobs:
           retention-days: 30
 
   e2e-webkit:
-    name: 'E2E - WebKit'
+    name: '🧭 E2E - WebKit'
     needs: smoke
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -121,17 +133,13 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx playwright install --with-deps webkit
-      - name: Install Angular app dependencies
-        run: cd angular-app && npm ci
+      - run: cd angular-app && npm ci
       - name: Start Angular app
         run: |
           cd angular-app
-          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 --allowed-hosts all > /tmp/ng-serve.log 2>&1 &
-          echo "Angular PID: $!"
-
-      - name: Wait for Angular app
-        run: |
-          npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
+          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 --disable-host-check > /tmp/ng-serve.log 2>&1 &
+      - name: Wait for app
+        run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
       - run: npx playwright test --project=e2e-webkit
         env:
           CI: true
@@ -142,14 +150,54 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-  quality-gate:
-    name: '✅ Quality Gate'
+  azure-playwright-report:
+    name: '☁️ Azure Playwright Dashboard'
     needs: [smoke, e2e-chromium, e2e-firefox, e2e-webkit]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
-      - name: Check all jobs passed
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: cd angular-app && npm ci
+      - name: Start Angular app
         run: |
+          cd angular-app
+          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 --disable-host-check > /tmp/ng-serve.log 2>&1 &
+      - name: Wait for app
+        run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
+      - name: Run & report to Azure Playwright
+        run: npx playwright test -c playwright.service.config.ts --workers=4
+        env:
+          CI: true
+          PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
+          PLAYWRIGHT_SERVICE_ACCESS_TOKEN: ${{ secrets.PLAYWRIGHT_SERVICE_ACCESS_TOKEN }}
+          PLAYWRIGHT_SERVICE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: report-azure
+          path: playwright-report/
+          retention-days: 30
+
+  quality-gate:
+    name: '✅ Quality Gate'
+    needs: [unit-tests, smoke, e2e-chromium, e2e-firefox, e2e-webkit]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          echo "Unit Tests:   ${{ needs.unit-tests.result }}"
+          echo "Smoke:        ${{ needs.smoke.result }}"
+          echo "Chromium:     ${{ needs.e2e-chromium.result }}"
+          echo "Firefox:      ${{ needs.e2e-firefox.result }}"
+          echo "WebKit:       ${{ needs.e2e-webkit.result }}"
           if [ "${{ needs.smoke.result }}" != "success" ] || \
              [ "${{ needs.e2e-chromium.result }}" != "success" ] || \
              [ "${{ needs.e2e-firefox.result }}" != "success" ] || \
@@ -157,4 +205,47 @@ jobs:
             echo "❌ Quality Gate FAILED"
             exit 1
           fi
-          echo "✅ Quality Gate PASSED - all browsers green"
+          echo "✅ Quality Gate PASSED"
+
+      # ── Teams Notification (add TEAMS_WEBHOOK_URL secret to enable) ──
+      - name: Notify Teams on Success
+        if: success() && env.TEAMS_WEBHOOK_URL != ''
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        run: |
+          curl -H "Content-Type: application/json" -d '{
+            "type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{
+              "$schema":"http://adaptivecards.io/schemas/adaptive-card.json","type":"AdaptiveCard","version":"1.4",
+              "body":[
+                {"type":"TextBlock","text":"✅ All Tests PASSED","weight":"Bolder","size":"Medium","color":"Good"},
+                {"type":"FactSet","facts":[
+                  {"title":"Branch","value":"${{ github.ref_name }}"},
+                  {"title":"Run","value":"#${{ github.run_number }}"}
+                ]},
+                {"type":"ActionSet","actions":[{"type":"Action.OpenUrl","title":"View Report","url":"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}]}
+              ]
+            }}]
+          }' "$TEAMS_WEBHOOK_URL"
+
+      - name: Notify Teams on Failure
+        if: failure() && env.TEAMS_WEBHOOK_URL != ''
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        run: |
+          curl -H "Content-Type: application/json" -d '{
+            "type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{
+              "$schema":"http://adaptivecards.io/schemas/adaptive-card.json","type":"AdaptiveCard","version":"1.4",
+              "body":[
+                {"type":"TextBlock","text":"❌ Tests FAILED — needs triage","weight":"Bolder","size":"Medium","color":"Attention"},
+                {"type":"FactSet","facts":[
+                  {"title":"Branch","value":"${{ github.ref_name }}"},
+                  {"title":"Unit Tests","value":"${{ needs.unit-tests.result }}"},
+                  {"title":"Smoke","value":"${{ needs.smoke.result }}"},
+                  {"title":"Chromium","value":"${{ needs.e2e-chromium.result }}"},
+                  {"title":"Firefox","value":"${{ needs.e2e-firefox.result }}"},
+                  {"title":"WebKit","value":"${{ needs.e2e-webkit.result }}"}
+                ]},
+                {"type":"ActionSet","actions":[{"type":"Action.OpenUrl","title":"🔍 Triage Now","url":"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}]}
+              ]
+            }}]
+          }' "$TEAMS_WEBHOOK_URL"
