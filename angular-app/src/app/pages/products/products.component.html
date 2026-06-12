@@ -1,0 +1,50 @@
+<section>
+  <h1>Products</h1>
+  <div class="controls">
+    <input
+      [(ngModel)]="filterName"
+      (ngModelChange)="applyFilter()"
+      placeholder="Filter by name..."
+      aria-label="Filter products"
+    />
+    <select
+      [(ngModel)]="filterCategory"
+      (ngModelChange)="applyFilter()"
+      aria-label="Filter by category"
+    >
+      <option value="">All Categories</option>
+      <option value="fruit">Fruit</option>
+      <option value="veggie">Vegetable</option>
+    </select>
+    <span class="count">{{ filtered.length }} products</span>
+  </div>
+
+  <table aria-label="Product list">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Category</th>
+        <th>Price</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (p of filtered; track p.name) {
+        <tr>
+          <td>{{ p.name }}</td>
+          <td>{{ p.category }}</td>
+          <td>{{ p.price }}</td>
+          <td>
+            <span class="status" [ngClass]="statusClass(p.status)">{{
+              p.status
+            }}</span>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+
+  @if (filtered.length === 0) {
+    <p class="empty">No products found</p>
+  }
+</section>

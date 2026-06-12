@@ -1,0 +1,25 @@
+<section>
+  <h1>Welcome to MyApp</h1>
+  <p class="subtitle">Search, explore and manage your products</p>
+
+  <div class="search-box">
+    <input
+      [(ngModel)]="keyword"
+      (keydown)="onKeydown($event)"
+      placeholder="Search products..."
+      aria-label="Search products"
+    />
+    <button (click)="search()">Search</button>
+  </div>
+
+  <p class="error" role="alert">{{ error }}</p>
+
+  <div class="result-box">
+    @for (item of results; track item) {
+      <div class="result-item">{{ item }}</div>
+    }
+    @if (noResult) {
+      <p class="no-result">No results found</p>
+    }
+  </div>
+</section>
