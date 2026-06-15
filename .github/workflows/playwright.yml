@@ -7,7 +7,6 @@ on:
     branches: [main, dev]
 
 jobs:
-
   dev-smoke:
     name: '🔧 [Dev] Smoke Test'
     if: github.ref == 'refs/heads/xguo-dev'
@@ -168,11 +167,24 @@ jobs:
           node_modules/.bin/ng serve --host 0.0.0.0 --port 4200  > /tmp/ng-serve.log 2>&1 &
       - name: Wait for app
         run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
+      - name: Get Azure access token
+        id: azure-token
+        run: |
+          RESPONSE=$(curl -s -X POST \
+            "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "grant_type=client_credentials" \
+            --data-urlencode "client_id=${{ secrets.AZURE_CLIENT_ID }}" \
+            --data-urlencode "client_secret=${{ secrets.AZURE_CLIENT_SECRET }}" \
+            --data-urlencode "scope=https://playwright.microsoft.com/.default")
+          TOKEN=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
       - run: npx playwright test -c playwright.service.config.ts --workers=4
         env:
           CI: true
           PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
-          PLAYWRIGHT_SERVICE_ACCESS_TOKEN: ${{ secrets.PLAYWRIGHT_SERVICE_ACCESS_TOKEN }}
+          PLAYWRIGHT_SERVICE_ACCESS_TOKEN: ${{ steps.azure-token.outputs.token }}
           PLAYWRIGHT_SERVICE_RUN_ID: staging-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/upload-artifact@v4
         if: always()
@@ -247,11 +259,24 @@ jobs:
           node_modules/.bin/ng serve --host 0.0.0.0 --port 4200  > /tmp/ng-serve.log 2>&1 &
       - name: Wait for app
         run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
+      - name: Get Azure access token
+        id: azure-token
+        run: |
+          RESPONSE=$(curl -s -X POST \
+            "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "grant_type=client_credentials" \
+            --data-urlencode "client_id=${{ secrets.AZURE_CLIENT_ID }}" \
+            --data-urlencode "client_secret=${{ secrets.AZURE_CLIENT_SECRET }}" \
+            --data-urlencode "scope=https://playwright.microsoft.com/.default")
+          TOKEN=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
       - run: npx playwright test -c playwright.service.config.ts --workers=4
         env:
           CI: true
           PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
-          PLAYWRIGHT_SERVICE_ACCESS_TOKEN: ${{ secrets.PLAYWRIGHT_SERVICE_ACCESS_TOKEN }}
+          PLAYWRIGHT_SERVICE_ACCESS_TOKEN: ${{ steps.azure-token.outputs.token }}
           PLAYWRIGHT_SERVICE_RUN_ID: production-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/upload-artifact@v4
         if: always()
