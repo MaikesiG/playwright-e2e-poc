@@ -167,18 +167,14 @@ jobs:
           node_modules/.bin/ng serve --host 0.0.0.0 --port 4200  > /tmp/ng-serve.log 2>&1 &
       - name: Wait for app
         run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-      - name: Get Azure access token for Playwright
+      - name: Get Playwright service token
         id: azure-token
         run: |
-          TOKEN=$(az account get-access-token \
-            --resource https://playwright.microsoft.com \
-            --query accessToken -o tsv)
+          TOKEN=$(curl -s -X POST \
+            "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=client_credentials&client_id=${{ secrets.AZURE_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET }}&scope=https%3A%2F%2Fplaywright.microsoft.com%2F.default" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token', d.get('error_description','FAILED')))")
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> $GITHUB_OUTPUT
       - run: npx playwright test -c playwright.service.config.ts --workers=4
@@ -260,18 +256,14 @@ jobs:
           node_modules/.bin/ng serve --host 0.0.0.0 --port 4200  > /tmp/ng-serve.log 2>&1 &
       - name: Wait for app
         run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-      - name: Get Azure access token for Playwright
+      - name: Get Playwright service token
         id: azure-token
         run: |
-          TOKEN=$(az account get-access-token \
-            --resource https://playwright.microsoft.com \
-            --query accessToken -o tsv)
+          TOKEN=$(curl -s -X POST \
+            "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=client_credentials&client_id=${{ secrets.AZURE_CLIENT_ID }}&client_secret=${{ secrets.AZURE_CLIENT_SECRET }}&scope=https%3A%2F%2Fplaywright.microsoft.com%2F.default" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token', d.get('error_description','FAILED')))")
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> $GITHUB_OUTPUT
       - run: npx playwright test -c playwright.service.config.ts --workers=4
