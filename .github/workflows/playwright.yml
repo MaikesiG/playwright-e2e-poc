@@ -64,7 +64,8 @@ jobs:
         env:
           CI: true
           PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
-          PLAYWRIGHT_SERVICE_RUN_ID: ${{ format('smoke-{0}-{1}-{2}', github.ref_name, github.run_id, github.run_attempt) }}
+          # 【修改点】：使用 run_id-run_attempt-sha 避免特殊字符
+          PLAYWRIGHT_SERVICE_RUN_ID: smoke-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -213,7 +214,8 @@ jobs:
         env:
           CI: true
           PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
-          PLAYWRIGHT_SERVICE_RUN_ID: ${{ format('smoke-{0}-{1}-{2}', github.ref_name, github.run_id, github.run_attempt) }}
+          # 【修改点】：使用 run_id-run_attempt-sha 避免特殊字符
+          PLAYWRIGHT_SERVICE_RUN_ID: smoke-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
 
       - name: Run All Browsers (Azure Dashboard)
         if: |
@@ -234,7 +236,8 @@ jobs:
         env:
           CI: true
           PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
-          PLAYWRIGHT_SERVICE_RUN_ID: ${{ format('e2e-{0}-{1}-{2}', github.ref_name, github.run_id, github.run_attempt) }}
+          # 【修改点】：使用 run_id-run_attempt-sha 避免特殊字符
+          PLAYWRIGHT_SERVICE_RUN_ID: e2e-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
 
       - uses: actions/upload-artifact@v4
         if: always()
