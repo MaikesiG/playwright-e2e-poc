@@ -1,12 +1,24 @@
 name: Playwright E2E Tests
 
+# Optimized triggers to prevent duplicate runs on PR merge
 on:
   push:
     branches:
-      - '**'
+      - main
+      - development
+      - testing
+      - staging
+      - production
+      - 'releases/**'
   pull_request:
     branches:
-      - '**'
+      - main
+      - development
+      - testing
+      - staging
+      - production
+      - 'releases/**'
+    types: [opened, synchronize, reopened]
 
 jobs:
   smoke-test:
@@ -278,16 +290,17 @@ jobs:
         github.ref == 'refs/heads/development' ||
         github.ref == 'refs/heads/testing' ||
         github.ref == 'refs/heads/staging' ||
-        github.ref == 'refs/heads/production'
+        github.ref == 'refs/heads/production' ||
+        startsWith(github.ref, 'refs/heads/releases/')
       )
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
 
-    # Dynamically link the environment. e.g., pushing to production triggers the Production approval flow.
+    # Dynamically map Git branches to GitHub Environments to trigger approval flows
     environment:
-      name: ${{ github.ref == 'refs/heads/development' && 'Development' || github.ref == 'refs/heads/testing' && 'Testing' || github.ref == 'refs/heads/staging' && 'Staging' || github.ref == 'refs/heads/production' && 'Production' }}
+      name: ${{ github.ref == 'refs/heads/development' && 'Development' || github.ref == 'refs/heads/testing' && 'Testing' || github.ref == 'refs/heads/staging' && 'Staging' || github.ref == 'refs/heads/production' && 'Production' || startsWith(github.ref, 'refs/heads/releases/') && 'Production' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -297,7 +310,7 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Build Angular App
+      - name: Build Angular app
         run: |
           cd angular-app
           npm ci
@@ -310,10 +323,35 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Deploy to Azure
-        id: deploy-step
+      - name: Upload static site to Azure Storage
+        env:
+          # TODO: REPLACE WITH YOUR ACTUAL STORAGE ACCOUNT NAME
+          STORAGE_ACCOUNT_NAME: pocangularstorage2026
         run: |
-          # TODO: Replace with your actual deployment commands here
-          echo "Simulating deployment to ${{ github.ref_name }} environment..."
-          echo "If you use Azure Static Web Apps, you can use Azure/static-web-apps-deploy action here."
-          echo "If you use Blob Storage for static hosting, run: az storage blob upload-batch -s angular-app/dist/angular-app/browser -d \$WEB_CONTAINER_NAME --overwrite"
+          # Verify build output exists
+          if [ ! -d "angular-app/dist/angular-app/browser" ]; then
+            echo "Build output folder not found: angular-app/dist/angular-app/browser"
+            echo "Please verify the Angular dist path in angular.json or package scripts."
+            exit 1
+          fi
+
+          # Upload all generated static files to the $web container using OIDC auth.
+          az storage blob upload-batch \
+            --account-name "$STORAGE_ACCOUNT_NAME" \
+            --destination '$web' \
+            --source "angular-app/dist/angular-app/browser" \
+            --overwrite \
+            --auth-mode login
+
+      - name: Show static website endpoint
+        env:
+          # TODO: REPLACE WITH YOUR ACTUAL STORAGE ACCOUNT NAME
+          STORAGE_ACCOUNT_NAME: pocangularstorage2026
+        run: |
+          # Fetch and print the static website URL dynamically
+          echo "Deployment completed."
+          ENDPOINT=$(az storage account show \
+            --name "$STORAGE_ACCOUNT_NAME" \
+            --query "primaryEndpoints.web" \
+            --output tsv)
+          echo "Static website URL: $ENDPOINT"
