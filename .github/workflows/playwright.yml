@@ -2,159 +2,269 @@ name: Playwright E2E Tests
 
 on:
   push:
-    branches: [main, dev, xguo-dev]
+    branches:
+      - '**'
   pull_request:
-    branches: [main]
+    branches:
+      - '**'
 
 jobs:
-  smoke:
-    name: 'Smoke Tests - Chromium'
+  smoke-test:
+    name: '🔧 Smoke Test'
+    if: |
+      github.ref == 'refs/heads/xguo-dev' ||
+      github.ref == 'refs/heads/development' ||
+      github.ref == 'refs/heads/testing' ||
+      (
+        github.event_name == 'pull_request' &&
+        (
+          github.base_ref == 'development' ||
+          github.base_ref == 'testing'
+        )
+      )
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
+
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Install Angular app dependencies
-        run: cd angular-app && npm ci
+      - run: cd angular-app && npm ci
+
       - name: Start Angular app
         run: |
           cd angular-app
-          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 --allowed-hosts all > /tmp/ng-serve.log 2>&1 &
-          echo "Angular PID: $!"
+          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 > /tmp/ng-serve.log 2>&1 &
 
-      - name: Wait for Angular app
-        run: |
-          npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
-      - run: npm run test:smoke
+      - name: Wait for app
+        run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
+
+      - name: Run Smoke Tests (local)
+        run: npx playwright test --project=smoke-chromium
         env:
           CI: true
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run Smoke Tests (Azure Dashboard)
+        run: PLAYWRIGHT_SERVICE_RUN_ID="smoke-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}" npx playwright test --project=smoke-chromium -c playwright.service.config.ts
+        env:
+          CI: true
+          PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: report-smoke
+          name: smoke-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: playwright-report/
+          retention-days: 14
+
+  e2e-multi-browser:
+    name: '🚀 E2E - ${{ matrix.browser }}'
+    if: |
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/staging' ||
+      github.ref == 'refs/heads/production' ||
+      startsWith(github.ref, 'refs/heads/releases/') ||
+      (
+        github.event_name == 'pull_request' &&
+        (
+          github.base_ref == 'main' ||
+          github.base_ref == 'staging' ||
+          github.base_ref == 'production' ||
+          startsWith(github.base_ref, 'releases/')
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: chromium
+            project: e2e-chromium
+            deps: chromium
+          - browser: firefox
+            project: e2e-firefox
+            deps: firefox
+          - browser: webkit
+            project: e2e-webkit
+            deps: webkit
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.deps }}
+      - run: cd angular-app && npm ci
+
+      - name: Start Angular app
+        run: |
+          cd angular-app
+          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 > /tmp/ng-serve.log 2>&1 &
+
+      - name: Wait for app
+        run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
+
+      - name: Run E2E Tests (local)
+        run: npx playwright test --project=${{ matrix.project }}
+        env:
+          CI: true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-report-${{ matrix.browser }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: playwright-report/
           retention-days: 30
 
-  e2e-chromium:
-    name: 'E2E - Chromium'
-    needs: smoke
+  azure-dashboard:
+    name: '☁️ Azure Dashboard'
+    needs:
+      - smoke-test
+      - e2e-multi-browser
+    if: |
+      always() && (
+        github.ref == 'refs/heads/xguo-dev' ||
+        github.ref == 'refs/heads/development' ||
+        github.ref == 'refs/heads/testing' ||
+        github.ref == 'refs/heads/staging' ||
+        github.ref == 'refs/heads/production' ||
+        github.ref == 'refs/heads/main' ||
+        startsWith(github.ref, 'refs/heads/releases/') ||
+        (
+          github.event_name == 'pull_request' &&
+          (
+            github.base_ref == 'development' ||
+            github.base_ref == 'testing' ||
+            github.base_ref == 'staging' ||
+            github.base_ref == 'production' ||
+            github.base_ref == 'main' ||
+            startsWith(github.base_ref, 'releases/')
+          )
+        )
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      CI: true
+      PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
+
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - name: Install Angular app dependencies
-        run: cd angular-app && npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: cd angular-app && npm ci
+
       - name: Start Angular app
         run: |
           cd angular-app
-          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 --allowed-hosts all > /tmp/ng-serve.log 2>&1 &
-          echo "Angular PID: $!"
+          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 > /tmp/ng-serve.log 2>&1 &
 
-      - name: Wait for Angular app
-        run: |
-          npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
-      - run: npx playwright test --project=e2e-chromium
-        env:
-          CI: true
+      - name: Wait for app
+        run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run Smoke Tests (Azure Dashboard)
+        if: |
+          github.ref == 'refs/heads/xguo-dev' ||
+          github.ref == 'refs/heads/development' ||
+          github.ref == 'refs/heads/testing' ||
+          (
+            github.event_name == 'pull_request' &&
+            (
+              github.base_ref == 'development' ||
+              github.base_ref == 'testing'
+            )
+          )
+        run: PLAYWRIGHT_SERVICE_RUN_ID="smoke-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}" npx playwright test --project=smoke-chromium -c playwright.service.config.ts
+
+      - name: Run All Browsers (Azure Dashboard)
+        if: |
+          github.ref == 'refs/heads/main' ||
+          github.ref == 'refs/heads/staging' ||
+          github.ref == 'refs/heads/production' ||
+          startsWith(github.ref, 'refs/heads/releases/') ||
+          (
+            github.event_name == 'pull_request' &&
+            (
+              github.base_ref == 'main' ||
+              github.base_ref == 'staging' ||
+              github.base_ref == 'production' ||
+              startsWith(github.base_ref, 'releases/')
+            )
+          )
+        run: PLAYWRIGHT_SERVICE_RUN_ID="e2e-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}" npx playwright test -c playwright.service.config.ts --workers=4
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: report-e2e-chromium
-          path: playwright-report/
-          retention-days: 30
-
-  e2e-firefox:
-    name: 'E2E - Firefox'
-    needs: smoke
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npx playwright install --with-deps firefox
-      - name: Install Angular app dependencies
-        run: cd angular-app && npm ci
-      - name: Start Angular app
-        run: |
-          cd angular-app
-          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 --allowed-hosts all > /tmp/ng-serve.log 2>&1 &
-          echo "Angular PID: $!"
-
-      - name: Wait for Angular app
-        run: |
-          npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
-      - run: npx playwright test --project=e2e-firefox
-        env:
-          CI: true
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: report-e2e-firefox
-          path: playwright-report/
-          retention-days: 30
-
-  e2e-webkit:
-    name: 'E2E - WebKit'
-    needs: smoke
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npx playwright install --with-deps webkit
-      - name: Install Angular app dependencies
-        run: cd angular-app && npm ci
-      - name: Start Angular app
-        run: |
-          cd angular-app
-          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 --allowed-hosts all > /tmp/ng-serve.log 2>&1 &
-          echo "Angular PID: $!"
-
-      - name: Wait for Angular app
-        run: |
-          npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
-      - run: npx playwright test --project=e2e-webkit
-        env:
-          CI: true
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: report-e2e-webkit
+          name: azure-dashboard-report-${{ github.run_id }}-${{ github.run_attempt }}
           path: playwright-report/
           retention-days: 30
 
   quality-gate:
     name: '✅ Quality Gate'
-    needs: [smoke, e2e-chromium, e2e-firefox, e2e-webkit]
+    needs:
+      - smoke-test
+      - e2e-multi-browser
+      - azure-dashboard
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Check all jobs passed
+      - name: Evaluate results
         run: |
-          if [ "${{ needs.smoke.result }}" != "success" ] || \
-             [ "${{ needs.e2e-chromium.result }}" != "success" ] || \
-             [ "${{ needs.e2e-firefox.result }}" != "success" ] || \
-             [ "${{ needs.e2e-webkit.result }}" != "success" ]; then
+          echo "Smoke Test:       ${{ needs.smoke-test.result }}"
+          echo "E2E Multi-browser:${{ needs.e2e-multi-browser.result }}"
+          echo "Azure Dashboard:  ${{ needs.azure-dashboard.result }}"
+
+          FAILED=false
+          for result in \
+            "${{ needs.smoke-test.result }}" \
+            "${{ needs.e2e-multi-browser.result }}" \
+            "${{ needs.azure-dashboard.result }}"; do
+            if [ "$result" = "failure" ]; then
+              FAILED=true
+            fi
+          done
+
+          if [ "$FAILED" = "true" ]; then
             echo "❌ Quality Gate FAILED"
             exit 1
           fi
-          echo "✅ Quality Gate PASSED - all browsers green"
+
+          echo "✅ Quality Gate PASSED"
