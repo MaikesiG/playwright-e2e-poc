@@ -325,12 +325,11 @@ jobs:
 
       - name: Upload static site to Azure Storage
         env:
-          # TODO: REPLACE WITH YOUR ACTUAL STORAGE ACCOUNT NAME
           STORAGE_ACCOUNT_NAME: pocangularstorage2026
         run: |
-          # Verify build output exists
-          if [ ! -d "angular-app/dist/angular-app/browser" ]; then
-            echo "Build output folder not found: angular-app/dist/angular-app/browser"
+          # Verify build output exists. Changed to match typical Angular output without browser folder.
+          if [ ! -d "angular-app/dist/angular-app" ]; then
+            echo "Build output folder not found: angular-app/dist/angular-app"
             echo "Please verify the Angular dist path in angular.json or package scripts."
             exit 1
           fi
@@ -339,13 +338,12 @@ jobs:
           az storage blob upload-batch \
             --account-name "$STORAGE_ACCOUNT_NAME" \
             --destination '$web' \
-            --source "angular-app/dist/angular-app/browser" \
+            --source "angular-app/dist/angular-app" \
             --overwrite \
             --auth-mode login
 
       - name: Show static website endpoint
         env:
-          # TODO: REPLACE WITH YOUR ACTUAL STORAGE ACCOUNT NAME
           STORAGE_ACCOUNT_NAME: pocangularstorage2026
         run: |
           # Fetch and print the static website URL dynamically
