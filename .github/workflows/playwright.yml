@@ -60,12 +60,11 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Run Smoke Tests (Azure Dashboard)
-        run: npx playwright test --project=smoke-chromium -c playwright.service.config.ts
+        # 【修改点 1】：在 smoke-test 这个 job 里，也改为使用命令行注入
+        run: PLAYWRIGHT_SERVICE_RUN_ID="smoke-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}" npx playwright test --project=smoke-chromium -c playwright.service.config.ts
         env:
           CI: true
           PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
-          # 【修改点】：使用 run_id-run_attempt-sha 避免特殊字符
-          PLAYWRIGHT_SERVICE_RUN_ID: smoke-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -171,6 +170,13 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    # 【修改点 2】：静态环境变量提到了 Job 级，但不包括 PLAYWRIGHT_SERVICE_RUN_ID，防止覆盖
+    env:
+      CI: true
+      PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -210,12 +216,8 @@ jobs:
               github.base_ref == 'testing'
             )
           )
-        run: npx playwright test --project=smoke-chromium -c playwright.service.config.ts
-        env:
-          CI: true
-          PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
-          # 【修改点】：使用 run_id-run_attempt-sha 避免特殊字符
-          PLAYWRIGHT_SERVICE_RUN_ID: smoke-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        # 【修改点 3】：通过命令行直接注入变量
+        run: PLAYWRIGHT_SERVICE_RUN_ID="smoke-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}" npx playwright test --project=smoke-chromium -c playwright.service.config.ts
 
       - name: Run All Browsers (Azure Dashboard)
         if: |
@@ -232,12 +234,8 @@ jobs:
               startsWith(github.base_ref, 'releases/')
             )
           )
-        run: npx playwright test -c playwright.service.config.ts --workers=4
-        env:
-          CI: true
-          PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
-          # 【修改点】：使用 run_id-run_attempt-sha 避免特殊字符
-          PLAYWRIGHT_SERVICE_RUN_ID: e2e-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        # 【修改点 4】：通过命令行直接注入变量
+        run: PLAYWRIGHT_SERVICE_RUN_ID="e2e-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}" npx playwright test -c playwright.service.config.ts --workers=4
 
       - uses: actions/upload-artifact@v4
         if: always()
