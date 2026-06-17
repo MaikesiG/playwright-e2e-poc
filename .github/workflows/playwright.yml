@@ -268,3 +268,52 @@ jobs:
           fi
 
           echo "✅ Quality Gate PASSED"
+
+  deploy:
+    name: '🚀 Deploy'
+    needs: quality-gate
+    # Only trigger deployment on push to specific branches, skip during PRs
+    if: |
+      github.event_name == 'push' && (
+        github.ref == 'refs/heads/development' ||
+        github.ref == 'refs/heads/testing' ||
+        github.ref == 'refs/heads/staging' ||
+        github.ref == 'refs/heads/production'
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    # Dynamically link the environment. e.g., pushing to production triggers the Production approval flow.
+    environment:
+      name: ${{ github.ref == 'refs/heads/development' && 'Development' || github.ref == 'refs/heads/testing' && 'Testing' || github.ref == 'refs/heads/staging' && 'Staging' || github.ref == 'refs/heads/production' && 'Production' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Build Angular App
+        run: |
+          cd angular-app
+          npm ci
+          npm run build
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to Azure
+        id: deploy-step
+        run: |
+          # TODO: Replace with your actual deployment commands here
+          echo "Simulating deployment to ${{ github.ref_name }} environment..."
+          echo "If you use Azure Static Web Apps, you can use Azure/static-web-apps-deploy action here."
+          echo "If you use Blob Storage for static hosting, run: az storage blob upload-batch -s angular-app/dist/angular-app/browser -d \$WEB_CONTAINER_NAME --overwrite"
