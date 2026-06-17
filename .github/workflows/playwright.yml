@@ -80,7 +80,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: smoke-report-${{ github.ref_name }}-${{ github.run_id }}
+          name: smoke-report-${{ github.run_id }}-${{ github.run_attempt }}
           path: playwright-report/
           retention-days: 14
 
@@ -146,7 +146,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-report-${{ github.ref_name }}-${{ matrix.browser }}-${{ github.run_id }}
+          name: e2e-report-${{ matrix.browser }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: playwright-report/
           retention-days: 30
 
@@ -250,7 +250,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: azure-dashboard-report-${{ github.ref_name }}-${{ github.run_id }}
+          name: azure-dashboard-report-${{ github.run_id }}-${{ github.run_attempt }}
           path: playwright-report/
           retention-days: 30
 
