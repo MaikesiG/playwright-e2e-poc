@@ -319,8 +319,9 @@ jobs:
     name: '🚀 Deploy to ${{ github.ref_name }}'
     needs: quality-gate
 
-    # Strictly limit deployments to push events on these 4 specific release branches
     if: |
+      always() &&
+      needs.quality-gate.result == 'success' &&
       github.event_name == 'push' && (
         github.ref == 'refs/heads/releases/development' ||
         github.ref == 'refs/heads/releases/testing' ||
