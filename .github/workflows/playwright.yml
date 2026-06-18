@@ -282,25 +282,33 @@ jobs:
           echo "✅ Quality Gate PASSED"
 
   deploy:
-    name: '🚀 Deploy'
+    name: '🚀 Deploy to ${{ github.ref_name }}'
     needs: quality-gate
-    # Only trigger deployment on push to specific branches, skip during PRs
+
+    # Strictly limit deployments to push events on these 4 specific release branches
     if: |
       github.event_name == 'push' && (
-        github.ref == 'refs/heads/development' ||
-        github.ref == 'refs/heads/testing' ||
-        github.ref == 'refs/heads/staging' ||
-        github.ref == 'refs/heads/production' ||
-        startsWith(github.ref, 'refs/heads/releases/')
+        github.ref == 'refs/heads/releases/development' ||
+        github.ref == 'refs/heads/releases/testing' ||
+        github.ref == 'refs/heads/releases/staging' ||
+        github.ref == 'refs/heads/releases/production'
       )
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
 
-    # Dynamically map Git branches to GitHub Environments to trigger approval flows
+    # Dynamically map the git branch to the corresponding GitHub Environment
     environment:
-      name: ${{ github.ref == 'refs/heads/development' && 'Development' || github.ref == 'refs/heads/testing' && 'Testing' || github.ref == 'refs/heads/staging' && 'Staging' || github.ref == 'refs/heads/production' && 'Production' || startsWith(github.ref, 'refs/heads/releases/') && 'Production' }}
+      name: >-
+        ${{
+          github.ref == 'refs/heads/releases/development' && 'Development' ||
+          github.ref == 'refs/heads/releases/testing' && 'Testing' ||
+          github.ref == 'refs/heads/releases/staging' && 'Staging' ||
+          github.ref == 'refs/heads/releases/production' && 'Production'
+        }}
+      # Dynamically construct the URL for the GitHub UI based on the environment variable
+      url: https://${{ vars.STORAGE_ACCOUNT_NAME }}.z13.web.core.windows.net
 
     steps:
       - uses: actions/checkout@v4
@@ -324,32 +332,23 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Upload static site to Azure Storage
-        env:
-          STORAGE_ACCOUNT_NAME: pocangularstorage2026
         run: |
-          # Verify build output exists. Changed to match typical Angular output without browser folder.
+          # Verify build output exists
           if [ ! -d "angular-app/dist/angular-app" ]; then
             echo "Build output folder not found: angular-app/dist/angular-app"
-            echo "Please verify the Angular dist path in angular.json or package scripts."
             exit 1
           fi
 
-          # Upload all generated static files to the $web container using OIDC auth.
+          # Upload to the $web container dynamically using the environment variable STORAGE_ACCOUNT_NAME
           az storage blob upload-batch \
-            --account-name "$STORAGE_ACCOUNT_NAME" \
+            --account-name "${{ vars.STORAGE_ACCOUNT_NAME }}" \
             --destination '$web' \
             --source "angular-app/dist/angular-app" \
             --overwrite \
             --auth-mode login
 
-      - name: Show static website endpoint
-        env:
-          STORAGE_ACCOUNT_NAME: pocangularstorage2026
+      - name: Deployment Info
         run: |
-          # Fetch and print the static website URL dynamically
-          echo "Deployment completed."
-          ENDPOINT=$(az storage account show \
-            --name "$STORAGE_ACCOUNT_NAME" \
-            --query "primaryEndpoints.web" \
-            --output tsv)
-          echo "Static website URL: $ENDPOINT"
+          echo "Successfully deployed!"
+          echo "Target Storage Account: ${{ vars.STORAGE_ACCOUNT_NAME }}"
+          echo "Site URL: https://${{ vars.STORAGE_ACCOUNT_NAME }}.z13.web.core.windows.net"
