@@ -35,6 +35,11 @@ jobs:
         )
       )
     runs-on: ubuntu-latest
+    # Use official Playwright Docker image to skip slow OS dependency installations
+    # Version matched with package.json: v1.54.0
+    container:
+      image: mcr.microsoft.com/playwright:v1.54.0-noble
+
     timeout-minutes: 20
     permissions:
       id-token: write
@@ -48,7 +53,8 @@ jobs:
           cache: 'npm'
 
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      # Removed --with-deps because dependencies are already in the Docker image
+      - run: npx playwright install chromium
       - run: cd angular-app && npm ci
 
       - name: Start Angular app
@@ -101,6 +107,10 @@ jobs:
         )
       )
     runs-on: ubuntu-latest
+    # Use official Playwright Docker image
+    container:
+      image: mcr.microsoft.com/playwright:v1.54.0-noble
+
     timeout-minutes: 60
     permissions:
       id-token: write
@@ -127,7 +137,14 @@ jobs:
           cache: 'npm'
 
       - run: npm ci
-      - run: npx playwright install --with-deps ${{ matrix.deps }}
+
+      # Fix for Firefox running inside Docker containers
+      - name: Set HOME for Firefox
+        if: matrix.browser == 'firefox'
+        run: echo "HOME=/root" >> $GITHUB_ENV
+
+      # Removed --with-deps
+      - run: npx playwright install ${{ matrix.deps }}
       - run: cd angular-app && npm ci
 
       - name: Start Angular app
@@ -177,6 +194,10 @@ jobs:
         )
       )
     runs-on: ubuntu-latest
+    # Use official Playwright Docker image
+    container:
+      image: mcr.microsoft.com/playwright:v1.54.0-noble
+
     timeout-minutes: 60
     permissions:
       id-token: write
@@ -193,7 +214,13 @@ jobs:
           cache: 'npm'
 
       - run: npm ci
-      - run: npx playwright install --with-deps chromium firefox webkit
+
+      # Fix for Firefox running inside Docker containers
+      - name: Set HOME for Firefox
+        run: echo "HOME=/root" >> $GITHUB_ENV
+
+      # Removed --with-deps
+      - run: npx playwright install chromium firefox webkit
       - run: cd angular-app && npm ci
 
       - name: Start Angular app
