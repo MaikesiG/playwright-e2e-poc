@@ -337,10 +337,10 @@ jobs:
     environment:
       name: >-
         ${{
-          github.ref == 'refs/heads/releases/development' && 'Development' ||
-          github.ref == 'refs/heads/releases/testing' && 'Testing' ||
-          github.ref == 'refs/heads/releases/staging' && 'Staging' ||
-          github.ref == 'refs/heads/releases/production' && 'Production'
+          github.ref == 'refs/heads/releases/development' && 'development' ||
+          github.ref == 'refs/heads/releases/testing' && 'testing' ||
+          github.ref == 'refs/heads/releases/staging' && 'staging' ||
+          github.ref == 'refs/heads/releases/production' && 'production'
         }}
       # Dynamically construct the URL for the GitHub UI based on the environment variable
       url: https://${{ vars.STORAGE_ACCOUNT_NAME }}.z13.web.core.windows.net
