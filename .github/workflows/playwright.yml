@@ -1,9 +1,10 @@
 name: Playwright E2E Tests
 
+# Optimized triggers to prevent duplicate runs on PR merge
 on:
   push:
     branches:
-      - xguo-dev
+      - main
       - development
       - testing
       - staging
@@ -11,41 +12,37 @@ on:
       - 'releases/**'
   pull_request:
     branches:
+      - main
       - development
       - testing
       - staging
       - production
       - 'releases/**'
-
-# ─────────────────────────────────────────────────────────────
-# BRANCH → JOB MATRIX
-#
-# Branch/Event                         | Job triggered
-# -------------------------------------|-----------------------------
-# push: xguo-dev                       | smoke-test
-# push: development / testing /        | smoke-test
-#        staging / production          |
-# push: releases/**                    | e2e-multi-browser
-# pull_request → any non-releases/**   | smoke-test
-# pull_request → releases/**           | e2e-multi-browser
-#
-# ALL jobs report to Azure Playwright Service Dashboard.
-# ─────────────────────────────────────────────────────────────
+    types: [opened, synchronize, reopened]
 
 jobs:
-  # ──────────────────────────────────────────────────────────────
-  # SMOKE TEST
-  # Runs on:  all non-releases/** branches + PRs targeting them
-  # Tests:    smoke-chromium project only
-  # Azure ID: smoke-<branch>-<run_id>-<attempt>
-  # ──────────────────────────────────────────────────────────────
   smoke-test:
     name: '🔧 Smoke Test'
     if: |
-      !startsWith(github.ref, 'refs/heads/releases/') &&
-      !startsWith(github.base_ref, 'releases/')
+      github.ref == 'refs/heads/xguo-dev' ||
+      github.ref == 'refs/heads/development' ||
+      github.ref == 'refs/heads/testing' ||
+      (
+        github.event_name == 'pull_request' &&
+        (
+          github.base_ref == 'development' ||
+          github.base_ref == 'testing'
+        )
+      )
     runs-on: ubuntu-latest
+    # Use official Playwright Docker image to skip slow OS dependency installations
+    container:
+      image: mcr.microsoft.com/playwright:v1.54.0-noble
+
     timeout-minutes: 20
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -55,7 +52,8 @@ jobs:
           cache: 'npm'
 
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      # Removed --with-deps because dependencies are already in the Docker image
+      - run: npx playwright install chromium
       - run: cd angular-app && npm ci
 
       - name: Start Angular app
@@ -66,34 +64,60 @@ jobs:
       - name: Wait for app
         run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
 
+      - name: Run Smoke Tests (local)
+        run: npx playwright test --project=smoke-chromium
+        env:
+          CI: true
+
+      # --- NEW STEP: Install Azure CLI inside the Docker container ---
+      - name: Install Azure CLI
+        run: curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Run Smoke Tests (Azure Dashboard)
-        run: npx playwright test --project=smoke-chromium -c playwright.service.config.ts
+        run: PLAYWRIGHT_SERVICE_RUN_ID="smoke-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}" npx playwright test --project=smoke-chromium -c playwright.service.config.ts
         env:
           CI: true
           PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
-          PLAYWRIGHT_SERVICE_ACCESS_TOKEN: ${{ secrets.PLAYWRIGHT_SERVICE_ACCESS_TOKEN }}
-          PLAYWRIGHT_SERVICE_RUN_ID: smoke-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: smoke-report-${{ github.run_id }}
+          name: smoke-report-${{ github.run_id }}-${{ github.run_attempt }}
           path: playwright-report/
-          retention-days: 7
+          retention-days: 14
 
-  # ──────────────────────────────────────────────────────────────
-  # FULL E2E — MULTI-BROWSER
-  # Runs on:  releases/** branches + PRs targeting releases/**
-  # Tests:    e2e-chromium / e2e-firefox / e2e-webkit (parallel)
-  # Azure ID: e2e-<browser>-<branch>-<run_id>-<attempt>
-  # ──────────────────────────────────────────────────────────────
   e2e-multi-browser:
     name: '🚀 E2E - ${{ matrix.browser }}'
     if: |
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/staging' ||
+      github.ref == 'refs/heads/production' ||
       startsWith(github.ref, 'refs/heads/releases/') ||
-      startsWith(github.base_ref, 'releases/')
+      (
+        github.event_name == 'pull_request' &&
+        (
+          github.base_ref == 'main' ||
+          github.base_ref == 'staging' ||
+          github.base_ref == 'production' ||
+          startsWith(github.base_ref, 'releases/')
+        )
+      )
     runs-on: ubuntu-latest
+    # Use official Playwright Docker image
+    container:
+      image: mcr.microsoft.com/playwright:v1.54.0-noble
+
     timeout-minutes: 60
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -116,7 +140,14 @@ jobs:
           cache: 'npm'
 
       - run: npm ci
-      - run: npx playwright install --with-deps ${{ matrix.deps }}
+
+      # Fix for Firefox running inside Docker containers
+      - name: Set HOME for Firefox
+        if: matrix.browser == 'firefox'
+        run: echo "HOME=/root" >> $GITHUB_ENV
+
+      # Removed --with-deps
+      - run: npx playwright install ${{ matrix.deps }}
       - run: cd angular-app && npm ci
 
       - name: Start Angular app
@@ -127,45 +158,232 @@ jobs:
       - name: Wait for app
         run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
 
-      - name: Run E2E Tests (Azure Dashboard)
-        run: npx playwright test --project=${{ matrix.project }} -c playwright.service.config.ts
+      - name: Run E2E Tests (local)
+        run: npx playwright test --project=${{ matrix.project }}
         env:
           CI: true
-          PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
-          PLAYWRIGHT_SERVICE_ACCESS_TOKEN: ${{ secrets.PLAYWRIGHT_SERVICE_ACCESS_TOKEN }}
-          PLAYWRIGHT_SERVICE_RUN_ID: e2e-${{ matrix.browser }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-report-${{ matrix.browser }}-${{ github.run_id }}
+          name: e2e-report-${{ matrix.browser }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: playwright-report/
           retention-days: 30
 
-  # ──────────────────────────────────────────────────────────────
-  # QUALITY GATE
-  # Aggregates results — skipped jobs do NOT count as failure.
-  # ──────────────────────────────────────────────────────────────
+  azure-dashboard:
+    name: '☁️ Azure Dashboard'
+    needs:
+      - smoke-test
+      - e2e-multi-browser
+    if: |
+      always() && (
+        github.ref == 'refs/heads/xguo-dev' ||
+        github.ref == 'refs/heads/development' ||
+        github.ref == 'refs/heads/testing' ||
+        github.ref == 'refs/heads/staging' ||
+        github.ref == 'refs/heads/production' ||
+        github.ref == 'refs/heads/main' ||
+        startsWith(github.ref, 'refs/heads/releases/') ||
+        (
+          github.event_name == 'pull_request' &&
+          (
+            github.base_ref == 'development' ||
+            github.base_ref == 'testing' ||
+            github.base_ref == 'staging' ||
+            github.base_ref == 'production' ||
+            github.base_ref == 'main' ||
+            startsWith(github.base_ref, 'releases/')
+          )
+        )
+      )
+    runs-on: ubuntu-latest
+    # Use official Playwright Docker image
+    container:
+      image: mcr.microsoft.com/playwright:v1.54.0-noble
+
+    timeout-minutes: 60
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      CI: true
+      PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # Fix for Firefox running inside Docker containers
+      - name: Set HOME for Firefox
+        run: echo "HOME=/root" >> $GITHUB_ENV
+
+      # Removed --with-deps
+      - run: npx playwright install chromium firefox webkit
+      - run: cd angular-app && npm ci
+
+      - name: Start Angular app
+        run: |
+          cd angular-app
+          node_modules/.bin/ng serve --host 0.0.0.0 --port 4200 > /tmp/ng-serve.log 2>&1 &
+
+      - name: Wait for app
+        run: npx wait-on http-get://localhost:4200 --timeout 180000 --interval 2000 || (cat /tmp/ng-serve.log && exit 1)
+
+      # --- NEW STEP: Install Azure CLI inside the Docker container ---
+      - name: Install Azure CLI
+        run: curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run Smoke Tests (Azure Dashboard)
+        if: |
+          github.ref == 'refs/heads/xguo-dev' ||
+          github.ref == 'refs/heads/development' ||
+          github.ref == 'refs/heads/testing' ||
+          (
+            github.event_name == 'pull_request' &&
+            (
+              github.base_ref == 'development' ||
+              github.base_ref == 'testing'
+            )
+          )
+        run: PLAYWRIGHT_SERVICE_RUN_ID="smoke-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}" npx playwright test --project=smoke-chromium -c playwright.service.config.ts
+
+      - name: Run All Browsers (Azure Dashboard)
+        if: |
+          github.ref == 'refs/heads/main' ||
+          github.ref == 'refs/heads/staging' ||
+          github.ref == 'refs/heads/production' ||
+          startsWith(github.ref, 'refs/heads/releases/') ||
+          (
+            github.event_name == 'pull_request' &&
+            (
+              github.base_ref == 'main' ||
+              github.base_ref == 'staging' ||
+              github.base_ref == 'production' ||
+              startsWith(github.base_ref, 'releases/')
+            )
+          )
+        run: PLAYWRIGHT_SERVICE_RUN_ID="e2e-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}" npx playwright test -c playwright.service.config.ts --workers=4
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: azure-dashboard-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: playwright-report/
+          retention-days: 30
+
   quality-gate:
     name: '✅ Quality Gate'
-    needs: [smoke-test, e2e-multi-browser]
+    needs:
+      - smoke-test
+      - e2e-multi-browser
+      - azure-dashboard
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate results
         run: |
-          SMOKE="${{ needs.smoke-test.result }}"
-          E2E="${{ needs.e2e-multi-browser.result }}"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  Smoke Test:        $SMOKE"
-          echo "  E2E Multi-Browser: $E2E"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Smoke Test:       ${{ needs.smoke-test.result }}"
+          echo "E2E Multi-browser:${{ needs.e2e-multi-browser.result }}"
+          echo "Azure Dashboard:  ${{ needs.azure-dashboard.result }}"
+
           FAILED=false
-          for result in "$SMOKE" "$E2E"; do
-            if [ "$result" == "failure" ]; then FAILED=true; fi
+          for result in \
+            "${{ needs.smoke-test.result }}" \
+            "${{ needs.e2e-multi-browser.result }}" \
+            "${{ needs.azure-dashboard.result }}"; do
+            if [ "$result" = "failure" ]; then
+              FAILED=true
+            fi
           done
+
           if [ "$FAILED" = "true" ]; then
             echo "❌ Quality Gate FAILED"
             exit 1
           fi
+
           echo "✅ Quality Gate PASSED"
+
+  deploy:
+    name: '🚀 Deploy to ${{ github.ref_name }}'
+    needs: quality-gate
+
+    if: |
+      always() &&
+      needs.quality-gate.result == 'success' &&
+      github.event_name == 'push' && (
+        github.ref == 'refs/heads/releases/development' ||
+        github.ref == 'refs/heads/releases/testing' ||
+        github.ref == 'refs/heads/releases/staging' ||
+        github.ref == 'refs/heads/releases/production'
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    # Dynamically map the git branch to the corresponding GitHub Environment
+    environment:
+      name: >-
+        ${{
+          github.ref == 'refs/heads/releases/development' && 'development' ||
+          github.ref == 'refs/heads/releases/testing' && 'testing' ||
+          github.ref == 'refs/heads/releases/staging' && 'staging' ||
+          github.ref == 'refs/heads/releases/production' && 'production'
+        }}
+      # Dynamically construct the URL for the GitHub UI based on the environment variable
+      url: https://${{ vars.STORAGE_ACCOUNT_NAME }}.z13.web.core.windows.net
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Build Angular app
+        run: |
+          cd angular-app
+          npm ci
+          npm run build
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Upload static site to Azure Storage
+        run: |
+          # Verify build output exists
+          if [ ! -d "angular-app/dist/angular-app" ]; then
+            echo "Build output folder not found: angular-app/dist/angular-app"
+            exit 1
+          fi
+
+          # Upload to the $web container dynamically using the environment variable STORAGE_ACCOUNT_NAME
+          az storage blob upload-batch \
+            --account-name "${{ vars.STORAGE_ACCOUNT_NAME }}" \
+            --destination '$web' \
+            --source "angular-app/dist/angular-app" \
+            --overwrite \
+            --auth-mode login
+
+      - name: Deployment Info
+        run: |
+          echo "Successfully deployed!"
+          echo "Target Storage Account: ${{ vars.STORAGE_ACCOUNT_NAME }}"
+          echo "Site URL: https://${{ vars.STORAGE_ACCOUNT_NAME }}.z13.web.core.windows.net"
